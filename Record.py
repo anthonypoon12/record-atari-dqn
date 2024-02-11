@@ -198,7 +198,7 @@ class Record():
             for i in range(df[col].iloc[0].shape[0]):
                 df[f"{col}_{i}"] = df[col].apply(lambda x: x[i])
 
-            df.drop(columns=[col])
+            df.drop(columns=[col], inplace=True)
             
         return df
 
