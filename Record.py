@@ -113,7 +113,6 @@ class Record():
 
         # Keeps track of layer name and description to add to top of csv
         layerList = []
-        descriptionsList = []
         outputPath=self.output_dir+'/'+'activations'+'.csv'
         self.superLogger = SuperLogger(outputPath)
         
@@ -122,14 +121,12 @@ class Record():
             name = name if name != "" else "no_name_network"
             module.register_forward_hook(self.superLogger.addLogger())
             layerList.append(name)
-            descriptionsList.append(str(module))
         
         # Adding first row with layer names
         # I chose w to reset the file
         with open(outputPath, 'w', newline='') as file:
             writer = csv.writer(file)
             writer.writerow(layerList)
-            writer.writerow(descriptionsList)
             
     def recordObservation(self, observation, episode):
         path = f'{self.output_dir}/Episode{episode}'
@@ -182,6 +179,32 @@ class Record():
             df = pd.concat([df, df2])
         return df
     
+    def activationHookDF(filepath):
+        df = pd.read_csv(filepath)
+
+        # By default, all of the "numpy" values in the dataframe have an additional dimension
+        # e.g. an array of 9 elements is (1,9)
+        # We can squeeze it
+        
+        # The first column is generally the index, so we can remove it
+        orig_columns = df.columns[1:]
+
+        # Converts string array into numpy, and removes dimension
+        df[orig_columns] = df[orig_columns].applymap(lambda x: np.squeeze(np.array(eval(x)), axis=0))
+        
+
+        for col in orig_columns:
+            # We can use the shape of the first element as reference for all elements in the Series
+            for i in range(df[col].iloc[0].shape[0]):
+                df[f"{col}_{i}"] = df[col].apply(lambda x: x[i])
+
+            df.drop(columns=[col])
+            
+        return df
+
+
+
+
 # To do --> 
     # Need weights at end of every episode for every neuron along with biases
     # Need recording of activity for each neuron to determien whether neuron is activated by threat
