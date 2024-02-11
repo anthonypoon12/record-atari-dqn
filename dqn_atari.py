@@ -19,6 +19,7 @@ from stable_baselines3.common.atari_wrappers import (
 )
 from stable_baselines3.common.buffers import ReplayBuffer
 from torch.utils.tensorboard import SummaryWriter
+import Record
 
 
 def parse_args():
@@ -169,6 +170,7 @@ if __name__ == "__main__":
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     torch.backends.cudnn.deterministic = args.torch_deterministic
+    record = Record.Record(args.seed, 'recordOutputs')
 
     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
 
@@ -181,6 +183,8 @@ if __name__ == "__main__":
     optimizer = optim.Adam(q_network.parameters(), lr=args.learning_rate)
     target_network = QNetwork(envs).to(device)
     target_network.load_state_dict(q_network.state_dict())
+    
+    record.add_activation_hook(q_network)
 
     rb = ReplayBuffer(
         args.buffer_size,

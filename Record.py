@@ -11,6 +11,47 @@ from PIL import Image
 import pandas as pd
 from collections import defaultdict
 
+# Super Logger is a class to manage ActivationLoggers
+class SuperLogger():
+    # Holds a list of loggers, and uses the outputs to create a list to place into a csv
+    def __init__(self, csvFilePath):
+        self.loggers = []
+        self.csvFilePath = csvFilePath
+    
+    # addLogger returns the logger, allowing us to directly register the hook 
+    def addLogger(self):
+        logger = ActivationLogger(self)
+        self.loggers.append(logger)
+        return logger
+    
+    def checkAddToCSV(self):
+        # If all loggers have an output, we can place into the csv
+        # After placing into csv, we can reset all outputs
+        newRow = []
+        for logger in self.loggers:
+            if logger.output == None:
+                return
+            else:
+                newRow.append(logger.output)
+        with open(self.csvFilePath, 'a') as file:
+            writer = csv.writer(file)
+            writer.writerow(newRow)
+            self.setAllLoggers(None)
+
+    def setAllLoggers(self, value):
+        for logger in self.loggers:
+            logger.output = value
+        
+# Activation Logger allows us to hold onto the output value
+class ActivationLogger:
+    def __init__(self, superLogger):
+        self.superLogger = superLogger
+        self.output = None
+
+    def __call__(self, module, input, output):
+            self.output = output.tolist()
+            self.superLogger.checkAddToCSV()
+
 class Record():
     def __init__(self,seed,output_dir):
         self.seed=seed
@@ -27,6 +68,10 @@ class Record():
         self.output_dir=output_dir
 
         self.imageCounter = 0
+
+        self.activationHookFiles = []
+
+        self.superLogger = None
         
     def grab_w_n_b(self,agent,episode):
         """ Saves weight and bias information for each agent as a npy file """
@@ -63,39 +108,28 @@ class Record():
             output_name=folder+'/concat.npy'
             np.save(output_name,fmat)
 
-    def activation_hook(self, agent, input, output):
-        """ Save neural activity 
-        Parameters
-        ----------
-        inst : torch.nn.Module
-            The layer we want to attach the hook to.
-        inp : tuple of torch.Tensor
-            The input to the `forward` method.
-        out : torch.Tensor
-            The output of the `forward` method.
-        """
-        output_name=self.output_dir+'/'+'activations'+'.csv'
-        with open(output_name, 'a', newline='') as file:
-            writer = csv.writer(file)
-            writer.writerow(output.tolist())
-        print("This is working!")
-        
-
     def add_activation_hook(self, agent):
         # module is essentially the layer
-        layerList = []
-        for name, module in agent.named_modules():
-            module.register_forward_hook(self.activation_hook)
-            layerList.append(name)
-            print(f"The name is:{name} and the module is {module}")
 
-        output_name=self.output_dir+'/'+'activations'+'.csv'
+        # Keeps track of layer name and description to add to top of csv
+        layerList = []
+        descriptionsList = []
+        outputPath=self.output_dir+'/'+'activations'+'.csv'
+        self.superLogger = SuperLogger(outputPath)
+        
+        # superLogger will add loggers in correct order
+        for name, module in agent.named_modules():
+            name = name if name != "" else "no_name_network"
+            module.register_forward_hook(self.superLogger.addLogger())
+            layerList.append(name)
+            descriptionsList.append(str(module))
         
         # Adding first row with layer names
         # I chose w to reset the file
-        with open(output_name, 'w', newline='') as file:
+        with open(outputPath, 'w', newline='') as file:
             writer = csv.writer(file)
             writer.writerow(layerList)
+            writer.writerow(descriptionsList)
             
     def recordObservation(self, observation, episode):
         path = f'{self.output_dir}/Episode{episode}'
