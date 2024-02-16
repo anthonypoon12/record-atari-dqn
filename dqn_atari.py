@@ -197,6 +197,8 @@ if __name__ == "__main__":
     start_time = time.time()
 
     obs, _ = envs.reset(seed=args.seed)
+    record.classify_observation(obs)
+
     for global_step in range(args.total_timesteps):
         epsilon = linear_schedule(args.start_e, args.end_e, args.exploration_fraction * args.total_timesteps, global_step)
         if random.random() < epsilon:
@@ -206,6 +208,7 @@ if __name__ == "__main__":
             actions = torch.argmax(q_values, dim=1).cpu().numpy()
 
         next_obs, rewards, terminated, truncated, infos = envs.step(actions)
+        record.classify_observation(next_obs)
 
         if "final_info" in infos:
             for info in infos["final_info"]:
